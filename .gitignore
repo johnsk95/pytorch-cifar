@@ -1,0 +1,8 @@
+*.txt
+*.png
+
+/checkpoint
+/checkpoints
+/__pycache__
+/data
+/models/__pycache__
