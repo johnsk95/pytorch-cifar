@@ -25,7 +25,7 @@ class MergeAutoencoder(nn.Module):
             nn.Linear(1024, 512),
             nn.ReLU(True),
             nn.Linear(512, 256), 
-            nn.Linear(256, 100))
+            nn.Linear(256, 10))
         # decoder
         self.decoder = nn.Sequential(
             nn.Linear(256, 512),

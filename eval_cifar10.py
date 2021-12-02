@@ -14,7 +14,7 @@ import argparse
 from models import *
 from utils import progress_bar
 from models.colornet import ColorNet
-from models.autoencoder import MergeAutoencoder
+from models.autoencoder2 import MergeAutoencoder
 from models.resnet2 import ResNet18
 
 
@@ -31,23 +31,23 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 transform_train = transforms.Compose([
-    # transforms.RandomCrop(32, padding=4),
+    transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    transforms.Normalize((0.5070751592371323, 0.48654887331495095, 0.4409178433670343), (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.5070751592371323, 0.48654887331495095, 0.4409178433670343), (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
-trainset = torchvision.datasets.CIFAR100(
+trainset = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=256, shuffle=True, num_workers=2)
+    trainset, batch_size=128, shuffle=True, num_workers=2)
 
-testset = torchvision.datasets.CIFAR100(
+testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, num_workers=2)
@@ -161,7 +161,7 @@ if args.resume:
     start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=args.lr,
+optimizer = optim.SGD(net.parameters(), lr=0.1,
                       momentum=0.9, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[80, 120, 160])
 
@@ -212,7 +212,7 @@ def test(epoch):
 
     # Save checkpoint.
     acc = 100.*correct/total
-    with open('./best_reconstruction2.txt','a') as f:
+    with open('./best_reconstruction_cifar10.txt','a') as f:
         f.write(str(acc)+':'+str(epoch)+'\n')
     if acc > best_acc:
         print('Saving..')
@@ -223,7 +223,7 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/reconstruction2.pth')
+        torch.save(state, './checkpoint/reconstruction_cifar10.pth')
         best_acc = acc
 
 

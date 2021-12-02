@@ -14,7 +14,7 @@ import argparse
 from models import *
 from utils import progress_bar
 from models.colornet import ColorNet
-from models.autoencoder import MergeAutoencoder
+from models.autoencoder_cr import MergeAutoencoder
 from models.resnet2 import ResNet18
 
 
@@ -77,7 +77,7 @@ colorization = torch.load("checkpoints/colorization.pth")
 jigsaw = torch.load("checkpoints/jigsaw_v2.pth")
 rotation = torch.load("checkpoints/rotation.pth")
 simsiam = torch.load("checkpoints/simsiam.pth")
-reconstruction = torch.load('./checkpoints/merge_autoencoder_500epochs.pth')
+reconstruction = torch.load('./checkpoints/mergeColorRotation_autoencoder_500epochs.pth')
 
 colorization_resnet = ColorNet()
 jigsaw_resnet = ResNet18()
@@ -98,28 +98,28 @@ simsiam_resnet = ResNet18()
 # simsiam_resnet.load_state_dict(pretrained_simsiam_dict, strict=False)
 
 
-net = MergeAutoencoder(colorization_resnet, jigsaw_resnet, rotation_resnet, simsiam_resnet)
+net = MergeAutoencoder(colorization_resnet, rotation_resnet)
 
 net.colorization_resnet.load_state_dict(colorization['net'], strict=False)
-pretrained_jigsaw_dict = {key.replace("module.", ""): value for key, value in jigsaw['net'].items()}
-net.jigsaw_resnet.load_state_dict(pretrained_jigsaw_dict, strict=False)
+# pretrained_jigsaw_dict = {key.replace("module.", ""): value for key, value in jigsaw['net'].items()}
+# net.jigsaw_resnet.load_state_dict(pretrained_jigsaw_dict, strict=False)
 pretrained_rotation_dict = {key.replace("module.", ""): value for key, value in rotation['net'].items()}
 net.rotation_resnet.load_state_dict(pretrained_rotation_dict, strict=False)
-pretrained_simsiam_dict = {key.replace("backbone.", ""): value for key, value in simsiam['state_dict'].items()}
-net.simsiam_resnet.load_state_dict(pretrained_simsiam_dict, strict=False)
+# pretrained_simsiam_dict = {key.replace("backbone.", ""): value for key, value in simsiam['state_dict'].items()}
+# net.simsiam_resnet.load_state_dict(pretrained_simsiam_dict, strict=False)
 
 # freeze colorization feature extractor
 for param in net.colorization_resnet.parameters():
     param.requires_grad = False
 # freeze jigsaw feature extractor
-for param in net.jigsaw_resnet.parameters():
-    param.requires_grad = False
-# freeze rotation feature extractor
+# for param in net.jigsaw_resnet.parameters():
+#     param.requires_grad = False
+# # freeze rotation feature extractor
 for param in net.rotation_resnet.parameters():
     param.requires_grad = False
-# freeze simsiam feature extractor
-for param in net.simsiam_resnet.parameters():
-    param.requires_grad = False
+# # freeze simsiam feature extractor
+# for param in net.simsiam_resnet.parameters():
+#     param.requires_grad = False
 
 net.load_state_dict(reconstruction, strict=False)
 # print(net.load_state_dict(reconstruction, strict=False))
@@ -150,15 +150,6 @@ net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
-
-if args.resume:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load('./checkpoint/ckpt.pth')
-    net.load_state_dict(checkpoint['net'])
-    best_acc = checkpoint['acc']
-    start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(net.parameters(), lr=args.lr,
@@ -212,7 +203,7 @@ def test(epoch):
 
     # Save checkpoint.
     acc = 100.*correct/total
-    with open('./best_reconstruction2.txt','a') as f:
+    with open('./best_ablation_cr.txt','a') as f:
         f.write(str(acc)+':'+str(epoch)+'\n')
     if acc > best_acc:
         print('Saving..')
@@ -223,7 +214,7 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/reconstruction2.pth')
+        torch.save(state, './checkpoint/ablation_cr.pth')
         best_acc = acc
 
 
