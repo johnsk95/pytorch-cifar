@@ -60,34 +60,36 @@ from utils import progress_bar
 #         return wavg
 
 class weightMLP(nn.Module):
-    def __init__(self, m1, m2, m3, num_tasks=3):
+    def __init__(self, m1, m2, m3, m4, num_tasks=3):
         super(weightMLP, self).__init__()
         self.softmax = nn.Softmax(dim=1)
         # load different pretext tasks
         self.m1 = m1 # colorization
         self.m2 = m2 # jigsaw
         self.m3 = m3 # rotation
-        # self.m4 = m4 # simsiam
+        self.m4 = m4 # simsiam
         # remove last fc layer
         self.m1.linear = nn.Identity()
         self.m2.linear = nn.Identity()
         self.m3.linear = nn.Identity()
-        # self.m4.linear = nn.Identity()
+        self.m4.linear = nn.Identity()
         # concatenated layer predicts weights for each task
-        # self.weights = nn.Linear(512*3, num_tasks)
-        self.weights = nn.Linear(512*3, 512)
-        self.weights1 = nn.Linear(512, 256)
-        self.weights2 = nn.Linear(256, 100)
+        # self.weights = nn.Linear(512*3, 512)
+        self.weights = nn.Linear(512*3 + 2048, 1024)
+        self.weights1 = nn.Linear(1024, 512)
+        self.weights2 = nn.Linear(512, 100)
     def forward(self, x):
-        out1 = self.m1(x.clone())
-        out1 = out1.view(out1.size(0), -1)
         out2 = self.m2(x.clone())
         out2 = out2.view(out2.size(0), -1)
         out3 = self.m3(x.clone())
         out3 = out3.view(out3.size(0), -1)
-        # out4 = self.m4(x.clone())
-        # out4 = out4.view(out4.size(0), -1)
-        out = torch.cat((out1, out2, out3), dim=1)
+        out4 = self.m4(x.clone())
+        out4 = out4.view(out4.size(0), -1)
+        gray_x = transforms.Grayscale()(x.clone())
+        out1 = self.m1(gray_x)
+        out1 = out1.view(out2.size(0), -1)
+
+        out = torch.cat((out1, out2, out3, out4), dim=1)
         out = self.weights(out)
         out = self.weights1(out)
         out = self.weights2(out)
@@ -123,20 +125,20 @@ rotation_resnet.linear = nn.Linear(rotation_resnet.linear.in_features, 10)
 pretrained_simsiam_dict = {key.replace("backbone.", ""): value for key, value in simsiam['state_dict'].items()}
 simsiam_resnet.load_state_dict(pretrained_simsiam_dict, strict=False)
 
-# freeze colorization feature extractor
-for param in colorization_resnet.parameters():
-    param.requires_grad = False
-# freeze jigsaw feature extractor
-for param in jigsaw_resnet.parameters():
-    param.requires_grad = False
-# freeze rotation feature extractor
-for param in rotation_resnet.parameters():
-    param.requires_grad = False
-# freeze simsiam feature extractor
-for param in simsiam_resnet.parameters():
-    param.requires_grad = False
+# # freeze colorization feature extractor
+# for param in colorization_resnet.parameters():
+#     param.requires_grad = False
+# # freeze jigsaw feature extractor
+# for param in jigsaw_resnet.parameters():
+#     param.requires_grad = False
+# # freeze rotation feature extractor
+# for param in rotation_resnet.parameters():
+#     param.requires_grad = False
+# # freeze simsiam feature extractor
+# for param in simsiam_resnet.parameters():
+#     param.requires_grad = False
 
-net = weightMLP(jigsaw_resnet, rotation_resnet, simsiam_resnet)
+net = weightMLP(colorization_resnet, jigsaw_resnet, rotation_resnet, simsiam_resnet)
 net = net.to(device)
 
 # t = torch.randn(1,3,32,32).to(device)
@@ -170,8 +172,9 @@ testloader = torch.utils.data.DataLoader(
 criterion = nn.CrossEntropyLoss()
 # optimizer = optim.SGD(net.parameters(), lr=0.001,
 #                       momentum=0.9, weight_decay=5e-4)
-optimizer = optim.SGD(net.parameters(), lr=0.01,
+optimizer = optim.SGD(net.parameters(), lr=0.1,
                       momentum=0.9, weight_decay=5e-4)
+# optimizer = optim.Adam(net.parameters(), lr=0.1, weight_decay=5e-4)
 scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[80, 120, 160])
 
 # Training
@@ -245,6 +248,8 @@ def test(epoch):
 
     # Save checkpoint.
     acc = 100.*correct/total
+    with open('./best_ensemble4_2.txt','a') as f:
+        f.write(str(acc)+':'+str(epoch)+'\n')
     if acc > best_acc:
         print('Saving..')
         state = {
@@ -254,7 +259,7 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/ensemble.pth')
+        torch.save(state, './checkpoint/ensemble4_2.pth')
         best_acc = acc
 
 

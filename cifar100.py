@@ -13,8 +13,7 @@ import argparse
 
 from models import *
 from utils import progress_bar
-from models.colornet import ColorNet
-from models.autoencoder import MergeAutoencoder
+fron ensemble import weightMLP
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
@@ -44,7 +43,7 @@ transform_test = transforms.Compose([
 trainset = torchvision.datasets.CIFAR100(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
-    trainset, batch_size=256, shuffle=True, num_workers=2)
+    trainset, batch_size=128, shuffle=True, num_workers=2)
 
 testset = torchvision.datasets.CIFAR100(
     root='./data', train=False, download=True, transform=transform_test)
@@ -83,43 +82,20 @@ jigsaw_resnet = ResNet18()
 rotation_resnet = ResNet18()
 simsiam_resnet = ResNet18()
 
-# colorization_resnet.load_state_dict(colorization['net'], strict=False)
+colorization_resnet.load_state_dict(colorization['net'], strict=False)
 
-# pretrained_jigsaw_dict = {key.replace("module.", ""): value for key, value in jigsaw['net'].items()}
-# jigsaw_resnet.load_state_dict(pretrained_jigsaw_dict, strict=False)
+pretrained_jigsaw_dict = {key.replace("module.", ""): value for key, value in jigsaw['net'].items()}
+jigsaw_resnet.load_state_dict(pretrained_jigsaw_dict, strict=False)
 
-# pretrained_rotation_dict = {key.replace("module.", ""): value for key, value in rotation['net'].items()}
-# rotation_resnet.linear = nn.Linear(rotation_resnet.linear.in_features, 4)
-# rotation_resnet.load_state_dict(pretrained_rotation_dict, strict=False)
-# rotation_resnet.linear = nn.Linear(rotation_resnet.linear.in_features, 10)
+pretrained_rotation_dict = {key.replace("module.", ""): value for key, value in rotation['net'].items()}
+rotation_resnet.linear = nn.Linear(rotation_resnet.linear.in_features, 4)
+rotation_resnet.load_state_dict(pretrained_rotation_dict, strict=False)
+rotation_resnet.linear = nn.Linear(rotation_resnet.linear.in_features, 10)
 
-# pretrained_simsiam_dict = {key.replace("backbone.", ""): value for key, value in simsiam['state_dict'].items()}
-# simsiam_resnet.load_state_dict(pretrained_simsiam_dict, strict=False)
-
+pretrained_simsiam_dict = {key.replace("backbone.", ""): value for key, value in simsiam['state_dict'].items()}
+simsiam_resnet.load_state_dict(pretrained_simsiam_dict, strict=False)
 
 net = MergeAutoencoder(colorization_resnet, jigsaw_resnet, rotation_resnet, simsiam_resnet)
-
-net.colorization_resnet.load_state_dict(colorization['net'], strict=False)
-pretrained_jigsaw_dict = {key.replace("module.", ""): value for key, value in jigsaw['net'].items()}
-net.jigsaw_resnet.load_state_dict(pretrained_jigsaw_dict, strict=False)
-pretrained_rotation_dict = {key.replace("module.", ""): value for key, value in rotation['net'].items()}
-net.rotation_resnet.load_state_dict(pretrained_rotation_dict, strict=False)
-pretrained_simsiam_dict = {key.replace("backbone.", ""): value for key, value in simsiam['state_dict'].items()}
-net.simsiam_resnet.load_state_dict(pretrained_simsiam_dict, strict=False)
-
-# freeze colorization feature extractor
-for param in net.colorization_resnet.parameters():
-    param.requires_grad = False
-# freeze jigsaw feature extractor
-for param in net.jigsaw_resnet.parameters():
-    param.requires_grad = False
-# freeze rotation feature extractor
-for param in net.rotation_resnet.parameters():
-    param.requires_grad = False
-# freeze simsiam feature extractor
-for param in net.simsiam_resnet.parameters():
-    param.requires_grad = False
-
 net.load_state_dict(reconstruction, strict=False)
 net = net.to(device)
 
@@ -130,17 +106,12 @@ net = net.to(device)
 # pretrained_simsiam_dict = {key.replace("backbone.", ""): value for key, value in checkpoint['state_dict'].items()}
 # net.load_state_dict(pretrained_jigsaw_dict, strict=False)
 # net.linear = nn.Linear(512,100)
-removed = list(net.encoder.children())[:-1]
-net.encoder= torch.nn.Sequential(*removed)
+net = net.encoder
 
-layers = [module for module in net.encoder.modules() if not isinstance(module, nn.Sequential)]
-layers.append(nn.Linear(512,100))
-k = nn.Sequential(*layers)
-net.encoder = k
-# print(net)
-# x = torch.randn(1, 3, 32, 32).to(device)
-# y = net(x)
-# print(y.size())
+net = nn.Sequential(
+    net,
+    nn.Linear(256,100)
+)
 
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
